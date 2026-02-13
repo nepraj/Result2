@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResultScope | Result Hosting Platform</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        
+        /* A4 Paper Simulation */
+        .a4-paper {
+            width: 794px; /* A4 width at 96dpi */
+            min-height: 1123px; /* A4 height */
+            background: white;
+            margin: 0 auto;
+            padding: 40px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            display: none; /* Hidden by default */
+        }
+
+        /* Print Specifics */
+        @media print {
+            body * { visibility: hidden; }
+            #result-container, #result-container * { visibility: visible; }
+            #result-container { position: absolute; left: 0; top: 0; }
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <nav class="bg-blue-900 text-white shadow-lg relative z-20">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fas fa-graduation-cap text-2xl"></i>
+                <span id="nav-inst-name" class="text-xl font-bold tracking-wide">ResultScope</span>
+            </div>
+            <div>
+                <button onclick="toggleAdminPanel()" class="bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded text-sm font-semibold transition">
+                    <i class="fas fa-user-shield mr-2"></i>Admin Login
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 py-8 relative z-10">
+
+        <section id="search-section" class="max-w-xl mx-auto bg-white rounded-lg shadow-md p-8 mb-8 text-center">
+            <h2 class="text-2xl font-bold mb-2 text-gray-800">Check Result</h2>
+            <p class="text-gray-500 mb-6">Enter your details to view your scorecard.</p>
+            
+            <div class="space-y-4">
+                <input type="text" id="search-roll" placeholder="Enter Roll Number" class="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                <button onclick="searchResult()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition transform hover:scale-[1.02]">
+                    View Result
+                </button>
+            </div>
+            <p class="text-xs text-gray-400 mt-4">Demo Roll Nos: 1001 (Academic), 2001 (Competition)</p>
+        </section>
+
+        <div id="admin-return-wrapper" class="hidden max-w-[794px] mx-auto mb-4">
+            <button onclick="returnToAdminDashboard()" class="bg-gray-800 text-white px-4 py-2 rounded shadow hover:bg-gray-700 font-semibold flex items-center">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
+            </button>
+        </div>
+
+        <div id="result-wrapper" class="hidden flex flex-col items-center">
+            
+            <div class="flex space-x-4 mb-6">
+                <button id="student-back-btn" onclick="resetSearch()" class="bg-gray-500 text-white px-6 py-2 rounded shadow hover:bg-gray-600 font-semibold">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Search
+                </button>
+                <button onclick="downloadJPG()" class="bg-green-600 text-white px-6 py-2 rounded shadow hover:bg-green-700 font-semibold">
+                    <i class="fas fa-download mr-2"></i>Download HD JPG
+                </button>
+                <button onclick="shareResult()" class="bg-indigo-600 text-white px-6 py-2 rounded shadow hover:bg-indigo-700 font-semibold">
+                    <i class="fas fa-share-alt mr-2"></i>Share
+                </button>
+            </div>
+
+            <div id="result-container" class="a4-paper relative">
+                <div class="border-b-4 border-blue-900 pb-4 mb-6 text-center">
+                    <h1 id="res-inst-name" class="text-4xl font-bold text-blue-900 uppercase mb-2">Institution Name</h1>
+                    <p id="res-inst-address" class="text-gray-600">Address Line 1, City, State - Zip Code</p>
+                    <div class="mt-4 bg-blue-100 text-blue-900 inline-block px-4 py-1 rounded-full text-sm font-bold uppercase tracking-wider" id="res-exam-name">Annual Examination 2024</div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-8 text-sm border p-4 rounded bg-gray-50">
+                    <div><span class="font-bold text-gray-500">Name:</span> <span id="res-name" class="text-lg font-semibold block">Student Name</span></div>
+                    <div><span class="font-bold text-gray-500">Roll Number:</span> <span id="res-roll" class="text-lg font-semibold block">00000</span></div>
+                    
+                    <div id="wrapper-father"><span class="font-bold text-gray-500">Father's Name:</span> <span id="res-father" class="block">Parent Name</span></div>
+                    <div id="wrapper-dob"><span class="font-bold text-gray-500">Date of Birth:</span> <span id="res-dob" class="block">01-01-2000</span></div>
+                </div>
+
+                <div id="dynamic-result-content" class="mb-8">
+                    </div>
+
+                <div class="absolute bottom-10 left-10 right-10 flex justify-between items-end border-t pt-4">
+                    <div class="text-center">
+                        <div id="qrcode" class="mb-2"></div>
+                        <p class="text-[10px] text-gray-400 uppercase tracking-widest">Scan to Validate</p>
+                    </div>
+                    <div class="text-right flex flex-col items-end">
+                        <div class="h-16 w-32 mb-2 flex items-end justify-end">
+                            <img id="res-sig-img" src="" class="max-h-full max-w-full object-contain hidden" alt="Signature">
+                            <div id="res-sig-line" class="w-full border-b border-gray-400"></div>
+                        </div>
+                        <p class="font-bold text-blue-900">Controller of Examinations</p>
+                        <p class="text-xs text-gray-500" id="res-date">Date: 12-10-2024</p>
+                    </div>
+                </div>
+
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03]">
+                    <i class="fas fa-university text-[400px]"></i>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="admin-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl overflow-hidden">
+            
+            <div class="bg-gray-800 text-white p-4 flex justify-between items-center">
+                <h3 class="font-bold text-lg"><i class="fas fa-cog mr-2"></i>Admin Dashboard</h3>
+                <div class="flex items-center gap-3">
+                    <div class="text-xs font-mono bg-gray-700 px-2 py-1 rounded text-green-400" id="session-timer">
+                        Session: 30:00
+                    </div>
+                    <button onclick="adminLogout()" class="bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-1 rounded font-bold transition">
+                        <i class="fas fa-sign-out-alt mr-1"></i>Logout
+                    </button>
+                    <button onclick="toggleAdminPanel()" class="text-gray-400 hover:text-white ml-2"><i class="fas fa-times text-lg"></i></button>
+                </div>
+            </div>
+
+            <div id="admin-login-view" class="p-8 text-center">
+                <h4 class="text-xl font-bold mb-4">Secure Login</h4>
+                <input type="password" id="admin-pass" placeholder="Password" class="border p-2 rounded w-64 mb-4 block mx-auto">
+                <div class="flex justify-center gap-3">
+                    <button onclick="toggleAdminPanel()" class="bg-gray-500 text-white px-6 py-2 rounded font-bold hover:bg-gray-600 transition">Back to Home</button>
+                    <button onclick="adminLogin()" class="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 transition">Login</button>
+                </div>
+            </div>
+
+            <div id="admin-dashboard-view" class="hidden">
+                <div class="flex border-b">
+                    <button onclick="switchTab('upload')" class="flex-1 p-3 text-sm font-bold bg-gray-100 hover:bg-gray-200" id="tab-btn-upload">Add Result</button>
+                    <button onclick="switchTab('view')" class="flex-1 p-3 text-sm font-bold hover:bg-gray-200" id="tab-btn-view">View All Results</button>
+                    <button onclick="switchTab('settings')" class="flex-1 p-3 text-sm font-bold hover:bg-gray-200" id="tab-btn-settings">Settings</button>
+                </div>
+
+                <div class="p-6 overflow-y-auto max-h-[60vh]">
+                    
+                    <div id="tab-upload">
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold mb-1">Result Type</label>
+                            <select id="new-type" onchange="toggleFormType()" class="w-full border p-2 rounded">
+                                <option value="academic">Academic (Subjects & Grades)</option>
+                                <option value="competition">Competition (Marks & Negatives)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2 mb-4">
+                            <input type="text" id="new-name" placeholder="Student Name" class="border p-2 rounded">
+                            <input type="text" id="new-roll" placeholder="Roll Number" class="border p-2 rounded">
+                            <input type="text" id="new-exam" placeholder="Exam Name" class="border p-2 rounded">
+                            <input type="text" id="new-father" placeholder="Father's Name (Optional)" class="border p-2 rounded">
+                            <input type="text" id="new-dob" placeholder="DOB (Optional: YYYY-MM-DD)" class="border p-2 rounded">
+                        </div>
+
+                        <div id="form-academic" class="space-y-2">
+                            <p class="text-xs font-bold text-gray-500 uppercase">Subjects (Format: Subject,Mark,Total)</p>
+                            <textarea id="new-subjects" rows="3" class="w-full border p-2 rounded" placeholder="Math,90,100&#10;Science,85,100&#10;English,88,100"></textarea>
+                        </div>
+
+                        <div id="form-competition" class="hidden grid grid-cols-2 gap-2">
+                            <input type="number" id="new-total-q" placeholder="Total Questions" class="border p-2 rounded">
+                            <input type="number" id="new-correct" placeholder="Correct Answers" class="border p-2 rounded">
+                            <input type="number" id="new-incorrect" placeholder="Incorrect Answers" class="border p-2 rounded">
+                            <input type="number" id="new-pos-mark" placeholder="Marks per Correct" value="4" class="border p-2 rounded">
+                            <input type="number" id="new-neg-mark" placeholder="Negative Marking" value="1" class="border p-2 rounded">
+                        </div>
+
+                        <button onclick="saveResult()" class="w-full bg-green-600 text-white font-bold py-2 rounded mt-4">Save Result</button>
+                    </div>
+
+                    <div id="tab-view" class="hidden">
+                        <div class="mb-3 p-2 bg-blue-50 text-blue-800 text-xs border border-blue-100 rounded">
+                            <i class="fas fa-info-circle mr-1"></i> Click "View" to see the result card. Use the back button on top to return here.
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left text-gray-500 border rounded">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                    <tr>
+                                        <th class="px-4 py-3">Roll</th>
+                                        <th class="px-4 py-3">Name</th>
+                                        <th class="px-4 py-3">Type</th>
+                                        <th class="px-4 py-3 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-results-list">
+                                    </tbody>
+                            </table>
+                        </div>
+                        <p id="no-results-msg" class="text-center text-gray-400 py-4 hidden">No results found.</p>
+                    </div>
+
+                    <div id="tab-settings" class="hidden">
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Institution Details</label>
+                        <input type="text" id="set-inst-name" placeholder="Institution Name" class="w-full border p-2 rounded mb-2">
+                        <input type="text" id="set-inst-addr" placeholder="Address" class="w-full border p-2 rounded mb-4">
+                        
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Controller Signature (Optional)</label>
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="flex-1">
+                                <input type="file" id="set-sig-upload" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                <p class="text-[10px] text-gray-400 mt-1">Upload PNG/JPG (Transparent background recommended)</p>
+                            </div>
+                            <div class="h-12 w-24 border bg-gray-50 flex items-center justify-center overflow-hidden">
+                                <img id="set-sig-preview" src="" class="max-h-full max-w-full object-contain hidden">
+                                <span id="set-sig-placeholder" class="text-xs text-gray-300">No Sig</span>
+                            </div>
+                            <button onclick="clearSignature()" class="text-red-500 text-xs hover:underline">Remove</button>
+                        </div>
+
+                        <button onclick="saveSettings()" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Update Settings</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA & STATE ---
+        const defaultData = [
+            {
+                type: 'academic', roll: '1001', name: 'Rahul Sharma', father: 'Amit Sharma', dob: '2005-08-15', exam: 'Class 10 Annual',
+                subjects: [ {sub:'Math', get:95, tot:100}, {sub:'Science', get:88, tot:100}, {sub:'English', get:92, tot:100} ]
+            },
+            {
+                type: 'competition', roll: '2001', name: 'Priya Singh', father: 'Vikram Singh', dob: '2004-02-10', exam: 'National Science Olympiad',
+                stats: { totalQ: 100, correct: 80, incorrect: 10, pos: 4, neg: 1 }
+            }
+        ];
+
+        // Init LocalStorage if empty
+        if(!localStorage.getItem('rs_data')) localStorage.setItem('rs_data', JSON.stringify(defaultData));
+        if(!localStorage.getItem('rs_inst')) localStorage.setItem('rs_inst', JSON.stringify({name: 'Gurukul Public School', addr: '123 Education Lane, Knowledge City', signature: null}));
+
+        // --- DOM ELEMENTS ---
+        const els = {
+            searchSec: document.getElementById('search-section'),
+            resultWrap: document.getElementById('result-wrapper'),
+            resultCont: document.getElementById('result-container'),
+            adminModal: document.getElementById('admin-modal'),
+            adminLogin: document.getElementById('admin-login-view'),
+            adminDash: document.getElementById('admin-dashboard-view'),
+            timer: document.getElementById('session-timer'),
+            adminReturnBtn: document.getElementById('admin-return-wrapper'),
+            studentBackBtn: document.getElementById('student-back-btn')
+        };
+
+        // Track if admin is viewing result to change back button behavior
+        let isAdminViewing = false;
+
+        // --- STUDENT FUNCTIONS ---
+        function searchResult() {
+            const roll = document.getElementById('search-roll').value;
+            const data = JSON.parse(localStorage.getItem('rs_data'));
+            const inst = JSON.parse(localStorage.getItem('rs_inst'));
+
+            const student = data.find(s => s.roll === roll);
+
+            if (!student) {
+                alert('Result not found! Try 1001 or 2001');
+                return;
+            }
+
+            // Render Header
+            document.getElementById('nav-inst-name').innerText = inst.name;
+            document.getElementById('res-inst-name').innerText = inst.name;
+            document.getElementById('res-inst-address').innerText = inst.addr;
+            
+            // Render Student Details
+            document.getElementById('res-name').innerText = student.name;
+            document.getElementById('res-roll').innerText = student.roll;
+            document.getElementById('res-exam-name').innerText = student.exam;
+
+            // Optional Fields Logic: Father's Name
+            const fatherWrap = document.getElementById('wrapper-father');
+            if (student.father && student.father.trim() !== "") {
+                fatherWrap.style.display = 'block';
+                document.getElementById('res-father').innerText = student.father;
+            } else {
+                fatherWrap.style.display = 'none';
+            }
+
+            // Optional Fields Logic: DOB
+            const dobWrap = document.getElementById('wrapper-dob');
+            if (student.dob && student.dob.trim() !== "") {
+                dobWrap.style.display = 'block';
+                document.getElementById('res-dob').innerText = student.dob;
+            } else {
+                dobWrap.style.display = 'none';
+            }
+
+            // Optional Fields Logic: Signature
+            const sigImg = document.getElementById('res-sig-img');
+            const sigLine = document.getElementById('res-sig-line');
+
+            if (inst.signature) {
+                sigImg.src = inst.signature;
+                sigImg.classList.remove('hidden');
+                sigLine.classList.add('hidden');
+            } else {
+                sigImg.classList.add('hidden');
+                sigLine.classList.remove('hidden');
+            }
+
+
+            // Render Body based on Type
+            const contentDiv = document.getElementById('dynamic-result-content');
+            let totalMarks = 0, obtained = 0, summaryText = "";
+
+            if (student.type === 'academic') {
+                let rows = student.subjects.map(s => {
+                    obtained += parseFloat(s.get);
+                    totalMarks += parseFloat(s.tot);
+                    return `<tr class="border-b"><td class="p-2">${s.sub}</td><td class="p-2 text-center">${s.tot}</td><td class="p-2 text-center font-bold">${s.get}</td></tr>`;
+                }).join('');
+                
+                let percent = totalMarks > 0 ? ((obtained/totalMarks)*100).toFixed(2) : 0;
+                let grade = percent > 90 ? 'A+' : (percent > 80 ? 'A' : 'B');
+
+                contentDiv.innerHTML = `
+                    <table class="w-full border-collapse border border-gray-300">
+                        <thead class="bg-gray-100"><tr><th class="border p-2 text-left">Subject</th><th class="border p-2">Max Marks</th><th class="border p-2">Obtained</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                        <tfoot class="bg-blue-50 font-bold">
+                            <tr><td class="p-2 text-right" colspan="2">Total Percentage</td><td class="p-2 text-center text-blue-900">${percent}% (${grade})</td></tr>
+                        </tfoot>
+                    </table>`;
+                
+                summaryText = `Name:${student.name}|Roll:${student.roll}|Score:${percent}%`;
+
+            } else {
+                // Competition Logic
+                const s = student.stats;
+                let score = (s.correct * s.pos) - (s.incorrect * s.neg);
+                let totalPossible = s.totalQ * s.pos;
+                let accuracy = s.totalQ > 0 ? ((s.correct / s.totalQ) * 100).toFixed(1) : 0;
+
+                contentDiv.innerHTML = `
+                    <div class="flex gap-4">
+                        <div class="flex-1 bg-gray-50 p-4 rounded border text-center">
+                            <div class="text-4xl font-bold text-blue-600 mb-1">${score}</div>
+                            <div class="text-xs text-gray-500 uppercase font-bold">Total Score</div>
+                        </div>
+                        <div class="flex-1 bg-green-50 p-4 rounded border text-center">
+                            <div class="text-4xl font-bold text-green-600 mb-1">${s.correct}</div>
+                            <div class="text-xs text-gray-500 uppercase font-bold">Correct Ans</div>
+                        </div>
+                        <div class="flex-1 bg-red-50 p-4 rounded border text-center">
+                            <div class="text-4xl font-bold text-red-600 mb-1">${s.incorrect}</div>
+                            <div class="text-xs text-gray-500 uppercase font-bold">Incorrect Ans</div>
+                        </div>
+                    </div>
+                    <div class="mt-4 p-4 border rounded bg-white">
+                        <p class="text-sm mb-2 font-bold text-gray-600">Performance Summary:</p>
+                        <ul class="list-disc list-inside text-sm text-gray-700">
+                            <li>Questions Attempted: ${s.correct + s.incorrect} / ${s.totalQ}</li>
+                            <li>Accuracy Rate: ${accuracy}%</li>
+                            <li>Marks Deduction: -${s.incorrect * s.neg} marks</li>
+                        </ul>
+                    </div>
+                `;
+                summaryText = `Name:${student.name}|Roll:${student.roll}|Marks:${score}/${totalPossible}`;
+            }
+
+            // Generate QR
+            document.getElementById('qrcode').innerHTML = "";
+            new QRCode(document.getElementById("qrcode"), {
+                text: summaryText,
+                width: 80,
+                height: 80
+            });
+
+            // Switch Views & Handle Buttons
+            els.searchSec.style.display = 'none';
+            els.resultWrap.classList.remove('hidden');
+            els.resultCont.style.display = 'block';
+
+            if (isAdminViewing) {
+                els.adminReturnBtn.classList.remove('hidden');
+                els.studentBackBtn.classList.add('hidden');
+            } else {
+                els.adminReturnBtn.classList.add('hidden');
+                els.studentBackBtn.classList.remove('hidden');
+            }
+        }
+
+        function resetSearch() {
+            // Standard back for students
+            els.resultWrap.classList.add('hidden');
+            els.resultCont.style.display = 'none';
+            els.searchSec.style.display = 'block';
+            document.getElementById('search-roll').value = '';
+            els.adminReturnBtn.classList.add('hidden');
+            isAdminViewing = false;
+        }
+
+        function returnToAdminDashboard() {
+            // Back for admins
+            els.resultWrap.classList.add('hidden');
+            els.resultCont.style.display = 'none';
+            els.searchSec.style.display = 'block'; // Reset underlying
+            els.adminReturnBtn.classList.add('hidden');
+            
+            // Re-open modal directly
+            els.adminModal.classList.remove('hidden');
+            els.adminDash.style.display = 'block';
+            els.adminLogin.style.display = 'none';
+            isAdminViewing = false;
+            startTimer(); // Refresh timer
+        }
+
+        function downloadJPG() {
+            window.scrollTo(0,0);
+            html2canvas(document.getElementById("result-container"), {
+                scale: 2, // High Res
+                useCORS: true
+            }).then(canvas => {
+                let link = document.createElement("a");
+                document.body.appendChild(link);
+                link.download = "result_card.jpg";
+                link.href = canvas.toDataURL("image/jpeg", 1.0);
+                link.click();
+            });
+        }
+
+        async function shareResult() {
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: 'My Exam Result',
+                        text: 'Check out my result on ResultScope!',
+                        url: window.location.href
+                    });
+                } catch (err) { console.log('Error sharing:', err); }
+            } else {
+                alert("Sharing not supported on this browser.");
+            }
+        }
+
+        // --- ADMIN FUNCTIONS ---
+        let sessionTime = 1800; // 30 mins
+        let timerInterval;
+
+        function toggleAdminPanel() {
+            els.adminModal.classList.toggle('hidden');
+            // If we are closing (hiding), we don't reset login unless they explicitly logout
+            // If we are opening, default behavior checks login state (which is handled by view visibility)
+            if(!els.adminModal.classList.contains('hidden') && els.adminDash.style.display === 'none') {
+                 els.adminLogin.style.display = 'block';
+            }
+            clearInterval(timerInterval);
+        }
+
+        function adminLogin() {
+            if (document.getElementById('admin-pass').value === 'Rajwar@020240') {
+                els.adminLogin.style.display = 'none';
+                els.adminDash.style.display = 'block';
+                startTimer();
+                loadSettings();
+                loadAllResults();
+            } else {
+                alert('Wrong Password');
+            }
+        }
+
+        function adminLogout() {
+            clearInterval(timerInterval);
+            sessionTime = 0;
+            // Reset to login view
+            els.adminDash.style.display = 'none';
+            els.adminLogin.style.display = 'block';
+            // Close modal
+            els.adminModal.classList.add('hidden');
+            document.getElementById('admin-pass').value = ''; // Clear password field
+            alert('Logged out successfully');
+        }
+
+        function startTimer() {
+            sessionTime = 1800;
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                sessionTime--;
+                let min = Math.floor(sessionTime / 60);
+                let sec = sessionTime % 60;
+                els.timer.innerText = `Session: ${min}:${sec < 10 ? '0'+sec : sec}`;
+                
+                if(sessionTime <= 0) {
+                    alert('Session Expired');
+                    adminLogout();
+                }
+            }, 1000);
+            
+            ['mousemove', 'keypress'].forEach(evt => 
+                window.addEventListener(evt, () => { if(sessionTime > 0 && !els.adminModal.classList.contains('hidden')) sessionTime = 1800; })
+            );
+        }
+
+        function switchTab(tab) {
+            document.getElementById('tab-upload').classList.add('hidden');
+            document.getElementById('tab-settings').classList.add('hidden');
+            document.getElementById('tab-view').classList.add('hidden');
+            
+            ['upload', 'view', 'settings'].forEach(t => {
+                document.getElementById(`tab-btn-${t}`).classList.remove('bg-gray-100');
+            });
+
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-btn-${tab}`).classList.add('bg-gray-100');
+
+            if(tab === 'view') {
+                loadAllResults();
+            }
+        }
+
+        function loadAllResults() {
+            const data = JSON.parse(localStorage.getItem('rs_data')) || [];
+            const tbody = document.getElementById('admin-results-list');
+            const msg = document.getElementById('no-results-msg');
+            
+            tbody.innerHTML = '';
+            
+            if(data.length === 0) {
+                msg.classList.remove('hidden');
+                return;
+            } else {
+                msg.classList.add('hidden');
+            }
+
+            data.forEach(s => {
+                let row = `
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-4 py-3 font-medium text-gray-900">${s.roll}</td>
+                        <td class="px-4 py-3">${s.name}</td>
+                        <td class="px-4 py-3 uppercase text-xs">${s.type}</td>
+                        <td class="px-4 py-3 text-right">
+                            <button onclick="adminViewResult('${s.roll}')" class="font-medium text-blue-600 hover:text-blue-800 border border-blue-600 rounded px-3 py-1 text-xs hover:bg-blue-50 transition">
+                                <i class="fas fa-eye mr-1"></i>View
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        function adminViewResult(roll) {
+            // Close modal temporarily
+            els.adminModal.classList.add('hidden');
+            isAdminViewing = true;
+            document.getElementById('search-roll').value = roll;
+            searchResult();
+        }
+
+        function toggleFormType() {
+            const type = document.getElementById('new-type').value;
+            if(type === 'academic') {
+                document.getElementById('form-academic').classList.remove('hidden');
+                document.getElementById('form-competition').classList.add('hidden');
+            } else {
+                document.getElementById('form-academic').classList.add('hidden');
+                document.getElementById('form-competition').classList.remove('hidden');
+            }
+        }
+
+        function saveResult() {
+            let type = document.getElementById('new-type').value;
+            // Allow optional fields to be empty string
+            let base = {
+                type: type,
+                name: document.getElementById('new-name').value,
+                roll: document.getElementById('new-roll').value,
+                exam: document.getElementById('new-exam').value,
+                father: document.getElementById('new-father').value,
+                dob: document.getElementById('new-dob').value 
+            };
+
+            if(!base.name || !base.roll || !base.exam) {
+                alert("Name, Roll Number and Exam Name are required.");
+                return;
+            }
+
+            if(type === 'academic') {
+                let rawSub = document.getElementById('new-subjects').value.split('\n');
+                base.subjects = rawSub.map(line => {
+                    let parts = line.split(',');
+                    return { sub: parts[0], get: parts[1], tot: parts[2] };
+                });
+            } else {
+                base.stats = {
+                    totalQ: parseInt(document.getElementById('new-total-q').value),
+                    correct: parseInt(document.getElementById('new-correct').value),
+                    incorrect: parseInt(document.getElementById('new-incorrect').value),
+                    pos: parseInt(document.getElementById('new-pos-mark').value),
+                    neg: parseInt(document.getElementById('new-neg-mark').value)
+                };
+            }
+
+            let currentData = JSON.parse(localStorage.getItem('rs_data'));
+            // Remove existing if duplicate roll for simplicity or just push
+            currentData = currentData.filter(d => d.roll !== base.roll); 
+            currentData.push(base);
+            
+            localStorage.setItem('rs_data', JSON.stringify(currentData));
+            alert('Result Saved! You can now search for Roll: ' + base.roll);
+            
+            // Clear inputs slightly
+            document.getElementById('new-roll').value = '';
+            document.getElementById('new-name').value = '';
+            
+            loadAllResults();
+            sessionTime = 1800; 
+        }
+
+        // --- SETTINGS WITH SIGNATURE ---
+        let tempSignature = null; // Store base64 here before saving
+
+        function loadSettings() {
+            let inst = JSON.parse(localStorage.getItem('rs_inst'));
+            document.getElementById('set-inst-name').value = inst.name;
+            document.getElementById('set-inst-addr').value = inst.addr;
+            
+            const preview = document.getElementById('set-sig-preview');
+            const placeholder = document.getElementById('set-sig-placeholder');
+            
+            if(inst.signature) {
+                tempSignature = inst.signature;
+                preview.src = inst.signature;
+                preview.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+            } else {
+                tempSignature = null;
+                preview.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+            }
+        }
+
+        // Handle File Input
+        document.getElementById('set-sig-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onloadend = function() {
+                    tempSignature = reader.result;
+                    let preview = document.getElementById('set-sig-preview');
+                    preview.src = tempSignature;
+                    preview.classList.remove('hidden');
+                    document.getElementById('set-sig-placeholder').classList.add('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function clearSignature() {
+            tempSignature = null;
+            document.getElementById('set-sig-upload').value = ''; // Reset input
+            document.getElementById('set-sig-preview').classList.add('hidden');
+            document.getElementById('set-sig-placeholder').classList.remove('hidden');
+        }
+
+        function saveSettings() {
+            let inst = {
+                name: document.getElementById('set-inst-name').value,
+                addr: document.getElementById('set-inst-addr').value,
+                signature: tempSignature // Save the Base64 string
+            };
+            localStorage.setItem('rs_inst', JSON.stringify(inst));
+            alert('Settings Updated!');
+        }
+
+    </script>
+</body>
+</html>
